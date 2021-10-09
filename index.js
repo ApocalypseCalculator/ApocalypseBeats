@@ -1,16 +1,21 @@
 const Discord = require('discord.js');
 const ytdl = require('ytdl-core');
+const ytsearch = require('youtube-search');
 const client = new Discord.Client();
 const token = require('./token');
 const prefix = '&'
 
 const queue = new Map();
+const opts = {
+    maxResults: 3,
+    key: token.ytkey
+}
 
 client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}!`);
     client.user.setPresence({
         activity: {
-            name: "beats."
+            name: `${prefix}poggerswoggers`
         },
         status: "online"
     });
@@ -42,6 +47,13 @@ client.on('message', msg => {
         getNp(msg, serverQueue);
         return;
     }
+    else if (command === "remove") {
+        remove(msg, serverQueue);
+        return;
+    }
+    else if (command === "poggerswoggers") {
+        return msg.channel.send('Sussy baka');
+    }
     else {
         msg.channel.send('Invalid command');
     }
@@ -49,8 +61,42 @@ client.on('message', msg => {
 
 client.login(token.token);
 
+async function remove(message, serverQueue) {
+    const args = message.content.split(" ");
+    let index = 0;
+    if (!args[1] || isNaN(args[1]) || parseInt(args[1]) <= 1) {
+        return message.channel.send('Invalid queue position for removal');
+    }
+    else {
+        index = parseInt(args[1]);
+    }
+
+    const voiceChannel = message.member.voice.channel;
+    if (!voiceChannel)
+        return message.channel.send(
+            "You need to be in a voice channel to play/remove music!"
+        );
+    if (!serverQueue) {
+        return message.channel.send('No music to remove');
+    }
+    else {
+        let song = serverQueue.songs[index-1];
+        if (serverQueue.songs.length >= index) {
+            serverQueue.songs.splice(index - 1, 1);
+            return message.channel.send(`Removed ${song.title} from position ${index}`);
+        }
+        else {
+            return message.channel.send('Invalid queue position for removal');
+        }
+    }
+}
+
 async function execute(message, serverQueue) {
     const args = message.content.split(" ");
+
+    if (!args[1]) {
+        return message.channel.send('Nothing specified');
+    }
 
     const voiceChannel = message.member.voice.channel;
     if (!voiceChannel)
@@ -67,7 +113,15 @@ async function execute(message, serverQueue) {
     let found = link.match(/\/watch\?v=[0-9a-zA-Z_-]{11}/);
     let vidid = "";
     if (!found || !found[0]) {
-        return message.channel.send('Invalid youtube link');
+        let val = await searchVid(`${message.content.slice(prefix.length + 5)}`).catch(err => { 
+            return message.channel.send('Invalid youtube link or no matching results'); 
+        });
+        if (!val) {
+            return message.channel.send('Invalid youtube link or no matching results');
+        }
+        else {
+            vidid = val;
+        }
     }
     else {
         vidid = found[0].slice(9);
@@ -81,7 +135,7 @@ async function execute(message, serverQueue) {
         length: songInfo.videoDetails.lengthSeconds,
         requestedby: message.author.tag,
         url: songInfo.videoDetails.video_url,
-        time: Date.now()
+        time: 0
     };
     if (!serverQueue) {
         const queueContruct = {
@@ -109,6 +163,18 @@ async function execute(message, serverQueue) {
     }
 }
 
+async function searchVid(keywords) {
+    return new Promise((resolve, reject) => {
+        ytsearch(keywords, opts, function (err, data) {
+            if (data.length > 0) {
+                resolve(data[0].id);
+            } else {
+                reject();
+            }
+        })
+    })
+}
+
 function play(guild, song) {
     const serverQueue = queue.get(guild.id);
     if (!song) {
@@ -116,6 +182,7 @@ function play(guild, song) {
         queue.delete(guild.id);
         return;
     }
+    song.time = Date.now();
     const dispatcher = serverQueue.connection
         .play(ytdl(song.url))
         .on("finish", () => {
