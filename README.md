@@ -7,6 +7,7 @@ Very poggers music bot made by ApocalypseCalculator.
 
 - Node.js v16 and npm which comes with Node.js
 - A Discord bot client
+- FFmpeg or avconv
 - (optional) a youtube v3 data api key. this is only required if you wish to use the play command with keywords
 - Not be a monke
 
